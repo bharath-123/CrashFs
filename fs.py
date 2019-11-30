@@ -10,7 +10,6 @@ from time import time
 import sys
 from os import getuid, getgid
 from stat import *
-from perms import *
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
