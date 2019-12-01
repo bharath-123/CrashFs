@@ -13,7 +13,14 @@ from stat import *
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
-class FileData():
+class Data():
+    def get_data(self):
+        pass
+
+    def set_data(self):
+        pass
+
+class FileData(Data):
     '''
     File data is just stored as string
     '''
@@ -24,34 +31,117 @@ class FileData():
         return self.data
 
     # currently no truncate support
-    def add_data(self, new_data):
+    def set_data(self, new_data):
         self.data = new_data
 
 class Inode():
+    def __init__(self, create_inode, name, mode=None, 
+            ctime=None, atime=None, mtime=None,
+            uid=None, gid=None):
+        self.name = name
+        self.inodes = [] # list of inodes in that directory
+        if create_inode:
+            self.inode = _Inode(
+                mode, 
+                ctime, 
+                atime,
+                mtime,
+                uid,
+                gid
+                )
+
+    def set_inode(self, new_inode):
+        self.inode = new_inode
+
+    def get_inode(self):
+        return self.inode
+
+    def set_name(self, new_name):
+        self.name = new_name
+        
+    def set_ctime(self, ctime):
+        if self.inode:
+            self.inode.ctime = ctime
+
+    def set_atime(self, atime):
+        if self.inode:
+            self.inode.atime = atime
+
+    def set_mtime(self, mtime):
+        if self.inode:
+            self.inode.mtime = mtime
+
+    # used to set permission bits
+    def set_mode(self, mode):    
+        if self.inode:
+            self.inode.mode &= 0o770000
+            self.inode.mode |= mode
+
+    def set_uid(self, uid):
+        if self.inode:
+            self.inode.uid = uid
+
+    def set_gid(self, gid):
+        if self.inode:
+            self.inode.gid = gid
+
+    def get_inode_info(self):
+        if self.inode:
+            return self.inode.get_inode_info()
+
+    def get_inode_type(self):
+        if self.inode:
+            return S_IFMT(self.inode.mode)
+
+    def get_data(self):
+        if self.inode:
+            return self.inode.get_data()
+
+    def set_data(self, new_data):
+        if self.inode:
+            return self.inode.set_data(new_data)
+
+    def get_nlink(self):
+        if self.inode:
+            return self.inode.nlink
+
+    def dec_nlink(self):
+        if self.inode:
+            self.inode.nlink -= 1
+
+    def inc_nlink(self):
+        if self.inode:
+            self.inode.nlink += 1
+
+class _Inode():
+    inode_cnt = 100
+
     def __init__(self, mode, ctime, atime,
-            mtime, uid, gid, name):
+            mtime, uid, gid):
+        self.inode_no = _Inode.inode_cnt + 1
         self.mode = mode
         self.ctime = ctime
         self.atime = atime
         self.mtime = mtime
         self.uid = uid
         self.gid = gid
-        self.name = name 
         self.data_blocks = self.get_data_class()
-        self.inodes = [] # list of inodes in that directory
-        if self.mode & S_IFREG:
+        if S_IFMT(self.mode) == S_IFREG:
             self.nlink = 1
-        elif self.mode & S_IFDIR:
+        elif S_IFMT(self.mode) == S_IFDIR:
             self.nlink = 2
-
-    def set_name(self, new_name):
-        self.name = new_name
 
     def get_data_class(self):
         # no data stored for directory.
         # the inode list is enough data for the directory
         if (S_IFMT(self.mode) == S_IFREG):
             return FileData()
+
+    def get_data(self):
+        return self.data_blocks.get_data()
+
+    def set_data(self, new_data):
+        self.data_blocks.set_data(new_data)
 
     def get_size(self):
         if (S_IFMT(self.mode) == S_IFREG):
@@ -64,6 +154,7 @@ class Inode():
     '''
     def get_inode_info(self):
         return dict(
+            st_ino = self.inode_no,
             st_mode = self.mode,
             st_ctime = self.ctime,
             st_atime = self.atime,
@@ -72,7 +163,7 @@ class Inode():
             st_size = self.get_size(),
             st_uid = self.uid,
             st_gid = self.gid,
-            st_blocks = int(self.get_size() / 512)
+            st_blocks = int(self.get_size() / 512) + 1
         )
 
 class MyFs(Operations):
@@ -80,13 +171,14 @@ class MyFs(Operations):
     
     def __init__(self):
         self.root_inode = Inode(
+            1,
+            "/",
             S_IFDIR | 0o755,
             time(),
             time(),
             time(),
             getuid(),
-            getgid(),
-            "/"
+            getgid()
             )
         self.name2inode = {}
         self.fd = 0
@@ -131,7 +223,7 @@ class MyFs(Operations):
                 return temp_node
             
             for node in temp_node.inodes:
-                if ((node.name == curr_name) and (S_IFMT(node.mode) in mode)):
+                if ((node.name == curr_name) and (node.get_inode_type() in mode)):
                     temp_node = node
                     found_node = True
                     break
@@ -172,23 +264,22 @@ class MyFs(Operations):
         if inode is None:
             raise FuseOSError(ENOENT)
 
-        inode.mode &= 0o770000 # zero out the permission bits
-        inode.mode |= mode
+        inode.set_mode(mode)
 
     def chown(self, path, uid, gid):
         inode = self.get_inode(path, [S_IFDIR, S_IFREG])
         if inode is None:
             raise FuseOSError(ENOENT)
 
-        inode.uid = uid
-        inode.gid = gid
+        inode.set_uid(uid)
+        inode.set_gid(gid)
  
     def write(self, path, data, offset, fh):
         inode = self.get_inode(path, [S_IFREG])        
         if inode is None:
             raise FuseOSError(ENOENT)
 
-        inode.data_blocks.add_data(data) 
+        inode.set_data(data) 
 
         return len(data)
 
@@ -197,7 +288,26 @@ class MyFs(Operations):
         if inode is None:
             raise FuseOSError(ENOENT)
 
-        return inode.data_blocks.get_data()
+        return inode.get_data()
+
+    def link(self, dst, src):
+        dst_filename, dst_parent_dir = MyFs.get_filename_and_parentdir(dst)
+        src_filename, src_parent_dir = MyFs.get_filename_and_parentdir(src)
+        
+        src_inode = self.get_inode(src, [S_IFREG])
+        dst_parent_inode = self.get_inode(dst_parent_dir, [S_IFDIR])
+        if src_inode is None or dst_parent_inode is None:
+            raise FuseOSError(ENONET)
+        
+        # first inc link count
+        src_inode.inc_nlink()
+
+        # don't like this. Need to figure out a way to not break 
+        # other code tho
+        dst_inode = Inode(0, dst_filename)
+
+        dst_inode.set_inode(src_inode.get_inode())
+        dst_parent_inode.inodes.append(dst_inode)
 
     def unlink(self, path):
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
@@ -209,15 +319,13 @@ class MyFs(Operations):
 
         # first check the curr_inode link count
         # delete from parent inode only if link count is 0
-        curr_inode.nlink -= 1
-        if curr_inode.nlink == 0:
-            parent_inode.inodes.remove(curr_inode)
+        curr_inode.dec_nlink()
+        
+        parent_inode.inodes.remove(curr_inode)
 
         self.invalidate_cache(path)
 
     def rename(self, old, new):
-        print(old)
-        print(new)
         curr_inode = self.get_inode(old, [S_IFREG, S_IFDIR])
         if curr_inode is None:
             raise FuseOSError(ENOENT)
@@ -231,13 +339,14 @@ class MyFs(Operations):
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
         
         inode = Inode(
+            1,
+            curr_filename,
             S_IFREG | 0o755,
             time(),
             time(),
             time(),
             getuid(),
-            getgid(),
-            curr_filename
+            getgid()
             )
 
         parent_inode = self.get_inode(parent_dir, [S_IFDIR])
@@ -252,13 +361,14 @@ class MyFs(Operations):
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
         
         inode = Inode(
+            1,
+            curr_filename,
             S_IFDIR | 0o755,
             time(),
             time(),
             time(),
             getuid(),
-            getgid(),
-            curr_filename
+            getgid()
             )
 
         parent_inode = self.get_inode(parent_dir, [S_IFDIR])
