@@ -10,6 +10,7 @@ from time import time
 import sys
 from os import getuid, getgid
 from stat import *
+from copy import copy, deepcopy
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
@@ -166,6 +167,17 @@ class _Inode():
             st_blocks = int(self.get_size() / 512) + 1
         )
 
+class CrashHistory():
+    def __init__(self):
+        self.history = []
+
+    def add_to_history(self, state):
+        self.history.append(state)
+
+    def get_latest_history(self):
+        if self.history:
+            return self.history[-1]
+
 class MyFs(Operations):
     fs_name = "Myfs"
     
@@ -180,8 +192,47 @@ class MyFs(Operations):
             getuid(),
             getgid()
             )
+        self.crash_history = CrashHistory()
         self.name2inode = {}
         self.fd = 0
+        self.setup_pseudo_files()
+
+    # setup files 'restore' and 'store' which 
+    # restore the fs to the latest state and store
+    # the current state of the fs in the crash_history object
+    def setup_pseudo_files(self):
+        restore = Inode(
+                1, 
+                "restore",
+                S_IFREG | 0o755,
+                time(),
+                time(),
+                time(),
+                getuid(),
+                getgid()
+                )
+        store = Inode(
+                1,
+                "store",
+                S_IFREG | 0o755,
+                time(),
+                time(),
+                time(),
+                getuid(),
+                getgid()
+                )
+
+        self.root_inode.inodes.append(restore)
+        self.root_inode.inodes.append(store)
+
+    def handle_fs_state(self, path):
+        if path == "/restore":
+            latest_state = self.crash_history.get_latest_history()
+            if latest_state:
+                self.root_inode = copy(latest_state)
+                self.wipe_out_cache()
+        else:
+            self.crash_history.add_to_history(deepcopy(self.root_inode))
 
     @staticmethod
     def get_filename_and_parentdir(path):
@@ -195,7 +246,7 @@ class MyFs(Operations):
     
     # we didnt cache the filename2inode mapping.
     # Search for the filesystem hierarchy. 
-    # expensive af :(
+    # really expensive tho :(
     def search_root_inode(self, name, mode):
         # if name is just root inode...
         if name == '/':
@@ -253,6 +304,9 @@ class MyFs(Operations):
 
         return inode
 
+    def wipe_out_cache(self):
+        self.name2inode = {}
+
     def invalidate_cache(self, path):
         try:
             del self.name2inode[path]    
@@ -273,8 +327,20 @@ class MyFs(Operations):
 
         inode.set_uid(uid)
         inode.set_gid(gid)
- 
+
+    # need to implement to overwrite files
+    # don't need to do anything here tho
+    def truncate(self, path, length):
+        pass
+
     def write(self, path, data, offset, fh):
+        # intercept write to the restore and store files
+        # only if 1 is echoed into the files
+        print("In write")
+        if path in ("/restore", "/store"):
+            self.handle_fs_state(path)
+            return 1
+        
         inode = self.get_inode(path, [S_IFREG])        
         if inode is None:
             raise FuseOSError(ENOENT)
