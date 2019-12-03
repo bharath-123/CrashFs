@@ -35,6 +35,22 @@ class FileData(Data):
     def set_data(self, new_data):
         self.data = new_data
 
+class SymlinkData(Data):
+    '''
+    Symlink data is just the inode to which 
+    the link has been created to 
+    The data is a weak reference to the inode
+    though
+    '''
+    def __init__(self):
+        self.file = ""
+        
+    def get_data(self):
+        return self.file
+
+    def set_data(self, new_file):
+        self.file = new_file
+
 class Inode():
     def __init__(self, create_inode, name, mode=None, 
             ctime=None, atime=None, mtime=None,
@@ -127,7 +143,7 @@ class _Inode():
         self.uid = uid
         self.gid = gid
         self.data_blocks = self.get_data_class()
-        if S_IFMT(self.mode) == S_IFREG:
+        if S_IFMT(self.mode) in [S_IFREG, S_IFLNK]:
             self.nlink = 1
         elif S_IFMT(self.mode) == S_IFDIR:
             self.nlink = 2
@@ -135,8 +151,10 @@ class _Inode():
     def get_data_class(self):
         # no data stored for directory.
         # the inode list is enough data for the directory
-        if (S_IFMT(self.mode) == S_IFREG):
+        if S_IFMT(self.mode) == S_IFREG:
             return FileData()
+        elif S_IFMT(self.mode) == S_IFLNK:
+            return SymlinkData()
 
     def get_data(self):
         return self.data_blocks.get_data()
@@ -145,9 +163,9 @@ class _Inode():
         self.data_blocks.set_data(new_data)
 
     def get_size(self):
-        if (S_IFMT(self.mode) == S_IFREG):
+        if S_IFMT(self.mode) in [S_IFREG, S_IFLNK]:
             return len(self.data_blocks.get_data())
-        elif (S_IFMT(self.mode) == S_IFDIR):
+        elif S_IFMT(self.mode) == S_IFDIR:
             return 4096
 
     '''
@@ -314,14 +332,14 @@ class MyFs(Operations):
             pass
 
     def chmod(self, path, mode):
-        inode = self.get_inode(path, [S_IFDIR, S_IFREG])
+        inode = self.get_inode(path, [S_IFDIR, S_IFREG, S_IFLNK])
         if inode is None:
             raise FuseOSError(ENOENT)
 
         inode.set_mode(mode)
 
     def chown(self, path, uid, gid):
-        inode = self.get_inode(path, [S_IFDIR, S_IFREG])
+        inode = self.get_inode(path, [S_IFDIR, S_IFREG, S_IFLNK])
         if inode is None:
             raise FuseOSError(ENOENT)
 
@@ -329,9 +347,9 @@ class MyFs(Operations):
         inode.set_gid(gid)
 
     # need to implement to overwrite files
-    # don't need to do anything here tho
+    # Increase the size of the file
     def truncate(self, path, length):
-        pass
+        pass 
 
     def write(self, path, data, offset, fh):
         # intercept write to the restore and store files
@@ -341,7 +359,7 @@ class MyFs(Operations):
             self.handle_fs_state(path)
             return 1
         
-        inode = self.get_inode(path, [S_IFREG])        
+        inode = self.get_inode(path, [S_IFREG, S_IFLNK])        
         if inode is None:
             raise FuseOSError(ENOENT)
 
@@ -350,7 +368,7 @@ class MyFs(Operations):
         return len(data)
 
     def read(self, path, size, offset, fh):
-        inode = self.get_inode(path, [S_IFREG])
+        inode = self.get_inode(path, [S_IFREG, S_IFLNK])
         if inode is None:
             raise FuseOSError(ENOENT)
 
@@ -378,7 +396,7 @@ class MyFs(Operations):
     def unlink(self, path):
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
 
-        curr_inode = self.get_inode(path, [S_IFREG])
+        curr_inode = self.get_inode(path, [S_IFREG, S_IFLNK])
         parent_inode = self.get_inode(parent_dir, [S_IFDIR])
         if ((parent_inode is None) or (curr_inode is None)):
             raise FuseOSError(ENOENT)
@@ -403,6 +421,38 @@ class MyFs(Operations):
         curr_inode.set_name(new_filename)
 
         self.invalidate_cache(old)
+
+    def symlink(self, target, source): 
+        target_filename, target_parent = MyFs.get_filename_and_parentdir(target)
+        source_filename, source_parent = MyFs.get_filename_and_parentdir(target)
+
+        target_parent_inode = self.get_inode(target_parent, [S_IFDIR])
+        source_inode = self.get_inode(source, [S_IFREG, S_IFLNK])
+        if target_parent_inode is None or source_inode is None:
+            return 1
+
+        target_inode = Inode(
+                    1,
+                    target_filename,
+                    S_IFLNK | 0o777,
+                    time(),
+                    time(),
+                    time(),
+                    getuid(),
+                    getgid()
+                    )
+
+        target_parent_inode.inodes.append(target_inode)
+        target_inode.set_data(source)
+
+        return 0
+
+    def readlink(self, path):
+        link_inode = self.get_inode(path, [S_IFLNK])
+        if link_inode is None:
+            raise FuseOSError(ENOENT)
+
+        return link_inode.get_data()
 
     def create(self, path, mode): 
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
@@ -463,7 +513,7 @@ class MyFs(Operations):
         self.invalidate_cache(path)
 
     def readdir(self, path, fh):  
-        node = self.get_inode(path, [S_IFDIR, S_IFREG])
+        node = self.get_inode(path, [S_IFDIR, S_IFREG, S_IFLNK])
         if node is None:
             return None
 
@@ -471,7 +521,7 @@ class MyFs(Operations):
             yield node.name
 
     def getattr(self, path, fh=None):
-        node = self.get_inode(path, [S_IFDIR, S_IFREG])
+        node = self.get_inode(path, [S_IFDIR, S_IFREG, S_IFLNK])
         if node is None:
             raise FuseOSError(ENOENT)
         
