@@ -389,6 +389,9 @@ class MyFs(Operations):
         
         parent_inode.inodes.remove(curr_inode)
 
+        if curr_inode.get_nlink() == 0:
+            del curr_inode
+
         self.invalidate_cache(path)
 
     def rename(self, old, new):
@@ -454,6 +457,8 @@ class MyFs(Operations):
             raise FuseOSError(ENOENT)
 
         parent_inode.inodes.remove(curr_inode)
+
+        del curr_inode
 
         self.invalidate_cache(path)
 
