@@ -35,6 +35,9 @@ class FileData(Data):
     def set_data(self, new_data):
         self.data = new_data
 
+    def get_size(self):
+        return len(self.data)
+
 class SymlinkData(Data):
     '''
     Symlink data is just stored as filename.
@@ -48,6 +51,9 @@ class SymlinkData(Data):
     def set_data(self, new_file):
         self.file = new_file
 
+    def get_size(self):
+        return len(self.data)
+
 class DirData(Data):
     '''
     Directory data is just the inode list 
@@ -55,7 +61,9 @@ class DirData(Data):
     class just so that we can add more functionality
     in the future
     '''
-    pass
+    # can be extended to add more features
+    def get_size(self):
+        return 4096
 
 class Inode():
     def __init__(self, create_inode, name, mode=None, 
@@ -171,10 +179,7 @@ class _Inode():
         self.data_blocks.set_data(new_data)
 
     def get_size(self):
-        if S_IFMT(self.mode) in [S_IFREG, S_IFLNK]:
-            return len(self.data_blocks.get_data())
-        elif S_IFMT(self.mode) == S_IFDIR:
-            return 4096
+        return self.data_blocks.get_size()
 
     '''
     This is for the getattrs
