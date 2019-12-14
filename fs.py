@@ -200,14 +200,14 @@ class _Inode():
 
 class CrashHistory():
     def __init__(self):
-        self.history = []
+        self.history = None
 
     def add_to_history(self, state):
-        self.history.append(state)
+        self.history = state
 
     def get_latest_history(self):
         if self.history:
-            return self.history[-1]
+            return self.history
 
 class MyFs(Operations):
     fs_name = "Myfs"
