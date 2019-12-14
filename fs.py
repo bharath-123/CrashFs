@@ -8,25 +8,35 @@ Crash recovery is built keeping the Memento Design Pattern in mind
 from errno import *
 from time import time
 import sys
-from os import getuid, getgid
+from os import getuid, getgid, mkdir, path
 from stat import *
 from copy import copy, deepcopy
 from data import *
 from inode import *
 import argparse
+import pickle
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
 class CrashHistory():
-    def __init__(self):
-        self.history = None
+    def __init__(self, backupstore):
+        self.backupstore = backupstore + "/CrashFsBackups"
+        if not path.exists(self.backupstore):
+            mkdir(self.backupstore)
+        self.backupfile = self.backupstore + "/history.pkl"
 
     def add_to_history(self, state):
-        self.history = state
+        with open(self.backupfile, "ab") as fd:
+            pickle.dump(state, fd)
 
     def get_latest_history(self):
-        if self.history:
-            return self.history
+        if not path.exists(self.backupfile):
+            return None
+
+        with open(self.backupfile, "rb") as fd:
+            backup = pickle.load(fd)
+
+        return backup
 
 class MyFs(Operations):
     fs_name = "Myfs"
@@ -42,10 +52,9 @@ class MyFs(Operations):
             getuid(),
             getgid()
             )
-        self.crash_history = CrashHistory()
+        self.crash_history = CrashHistory(backupstore)
         self.name2inode = {}
         self.fd = 0
-        self.backupstore = backupstore
         self.setup_pseudo_files()
 
     # setup files 'restore' and 'store' which 
