@@ -37,7 +37,7 @@ class SymlinkData(Data):
         self.file = new_file
 
     def get_size(self):
-        return len(self.data)
+        return len(self.file)
 
 class DirData(Data):
     '''
