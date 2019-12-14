@@ -31,16 +31,13 @@ class FileData(Data):
     def get_data(self):
         return self.data
 
-    # currently no truncate support
+    # truncate not supported
     def set_data(self, new_data):
         self.data = new_data
 
 class SymlinkData(Data):
     '''
-    Symlink data is just the inode to which 
-    the link has been created to 
-    The data is a weak reference to the inode
-    though
+    Symlink data is just stored as filename.
     '''
     def __init__(self):
         self.file = ""
@@ -50,6 +47,15 @@ class SymlinkData(Data):
 
     def set_data(self, new_file):
         self.file = new_file
+
+class DirData(Data):
+    '''
+    Directory data is just the inode list 
+    which we maintain in each inode. But add a
+    class just so that we can add more functionality
+    in the future
+    '''
+    pass
 
 class Inode():
     def __init__(self, create_inode, name, mode=None, 
@@ -155,6 +161,8 @@ class _Inode():
             return FileData()
         elif S_IFMT(self.mode) == S_IFLNK:
             return SymlinkData()
+        elif S_IFMT(self.mode) == S_IFDIR:
+            return DirData()
 
     def get_data(self):
         return self.data_blocks.get_data()
@@ -263,7 +271,7 @@ class MyFs(Operations):
         return curr_filename, parent_dir
     
     # we didnt cache the filename2inode mapping.
-    # Search for the filesystem hierarchy. 
+    # Search in the filesystem hierarchy. 
     # really expensive tho :(
     def search_root_inode(self, name, mode):
         # if name is just root inode...
@@ -349,12 +357,10 @@ class MyFs(Operations):
     # need to implement to overwrite files
     # Increase the size of the file
     def truncate(self, path, length):
-        pass 
+        pass
 
     def write(self, path, data, offset, fh):
         # intercept write to the restore and store files
-        # only if 1 is echoed into the files
-        print("In write")
         if path in ("/restore", "/store"):
             self.handle_fs_state(path)
             return 1
