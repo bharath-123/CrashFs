@@ -260,7 +260,7 @@ class MyFs(Operations):
         if path == "/restore":
             latest_state = self.crash_history.get_latest_history()
             if latest_state:
-                self.root_inode = copy(latest_state)
+                self.root_inode = deepcopy(latest_state)
                 self.wipe_out_cache()
         else:
             self.crash_history.add_to_history(deepcopy(self.root_inode))
