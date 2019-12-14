@@ -13,6 +13,7 @@ from stat import *
 from copy import copy, deepcopy
 from data import *
 from inode import *
+import argparse
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
@@ -30,7 +31,7 @@ class CrashHistory():
 class MyFs(Operations):
     fs_name = "Myfs"
     
-    def __init__(self):
+    def __init__(self, backupstore):
         self.root_inode = Inode(
             1,
             "/",
@@ -44,6 +45,7 @@ class MyFs(Operations):
         self.crash_history = CrashHistory()
         self.name2inode = {}
         self.fd = 0
+        self.backupstore = backupstore
         self.setup_pseudo_files()
 
     # setup files 'restore' and 'store' which 
@@ -357,7 +359,13 @@ class MyFs(Operations):
         return node.get_inode_info()
         
 if __name__ == "__main__":
-    mount_point = sys.argv[1]
+    fs_parser = argparse.ArgumentParser()
 
-    fuse = FUSE(MyFs(), mount_point, foreground=True, nothreads=True)
+    fs_parser.add_argument('mountpoint', help="The mount point of this filesystem")
+    fs_parser.add_argument('backupstore', help="The mount point of the backup filesystem(Preferably a different device)")
+
+    args = fs_parser.parse_args()
+    print(args)
+
+    fuse = FUSE(MyFs(args.backupstore), args.mountpoint, foreground=True, nothreads=True)
 
