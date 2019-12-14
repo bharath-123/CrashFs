@@ -66,14 +66,14 @@ class MyFs(Operations):
         self.root_inode.inodes.append(restore)
         self.root_inode.inodes.append(store)
 
-    def handle_fs_state(self, path):
+    def handle_fs_state(self, path, version):
         if path == "/restore":
-            latest_state = self.crash_history.get_latest_history()
+            latest_state = self.crash_history.get_latest_history(version)
             if latest_state:
-                self.root_inode = deepcopy(latest_state)
+                self.root_inode = copy(latest_state)
                 self.wipe_out_cache()
         else:
-            self.crash_history.add_to_history(deepcopy(self.root_inode))
+            self.crash_history.add_to_history(copy(self.root_inode), version)
 
     @staticmethod
     def get_filename_and_parentdir(path):
@@ -177,7 +177,7 @@ class MyFs(Operations):
     def write(self, path, data, offset, fh):
         # intercept write to the restore and store files
         if path in ("/restore", "/store"):
-            self.handle_fs_state(path)
+            self.handle_fs_state(path, data.decode('utf-8').rstrip())
          
         inode = self.get_inode(path, [S_IFREG, S_IFLNK])        
         if inode is None:
