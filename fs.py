@@ -18,26 +18,6 @@ import pickle
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
-class CrashHistory():
-    def __init__(self, backupstore):
-        self.backupstore = backupstore + "/CrashFsBackups"
-        if not path.exists(self.backupstore):
-            mkdir(self.backupstore)
-        self.backupfile = self.backupstore + "/history.pkl"
-
-    def add_to_history(self, state):
-        with open(self.backupfile, "ab") as fd:
-            pickle.dump(state, fd)
-
-    def get_latest_history(self):
-        if not path.exists(self.backupfile):
-            return None
-
-        with open(self.backupfile, "rb") as fd:
-            backup = pickle.load(fd)
-
-        return backup
-
 class MyFs(Operations):
     fs_name = "Myfs"
     
@@ -191,14 +171,13 @@ class MyFs(Operations):
     # need to implement to overwrite files
     # Increase the size of the file
     def truncate(self, path, length):
-        pass
+        pass   
 
     def write(self, path, data, offset, fh):
         # intercept write to the restore and store files
         if path in ("/restore", "/store"):
             self.handle_fs_state(path)
-            return 1
-        
+         
         inode = self.get_inode(path, [S_IFREG, S_IFLNK])        
         if inode is None:
             raise FuseOSError(ENOENT)
@@ -374,7 +353,6 @@ if __name__ == "__main__":
     fs_parser.add_argument('backupstore', help="The mount point of the backup filesystem(Preferably a different device)")
 
     args = fs_parser.parse_args()
-    print(args)
 
     fuse = FUSE(MyFs(args.backupstore), args.mountpoint, foreground=True, nothreads=True)
 
