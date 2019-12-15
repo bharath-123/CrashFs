@@ -237,7 +237,7 @@ class MyFs(Operations):
         if path in ("/restore", "/store"):
             self.handle_fs_state(path, data.decode('utf-8').rstrip())
 
-        if parent_dir == "/version":
+        if parent_dir == "/versions":
             raise FuseOSError(EPERM)
          
         inode = self.get_inode(path, [S_IFREG, S_IFLNK])        
@@ -252,7 +252,7 @@ class MyFs(Operations):
     def read(self, path, size, offset, fh):
         filename, parent_dir = MyFs.get_filename_and_parentdir(path)
         # prevent reading of the restore and store files
-        if path in ("/restore", "/store") or parent_dir == "/version":
+        if path in ("/restore", "/store") or parent_dir == "/versions":
             raise FuseOSError(EPERM)
 
         inode = self.get_inode(path, [S_IFREG, S_IFLNK])
