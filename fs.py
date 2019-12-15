@@ -265,7 +265,10 @@ class MyFs(Operations):
     def link(self, dst, src):
         dst_filename, dst_parent_dir = MyFs.get_filename_and_parentdir(dst)
         src_filename, src_parent_dir = MyFs.get_filename_and_parentdir(src)
-        
+       
+        if src in ("/restore", "/store") or src_parent_dir in ("/versions"):
+            raise FuseOSError(EPERM)
+
         src_inode = self.get_inode(src, [S_IFREG])
         dst_parent_inode = self.get_inode(dst_parent_dir, [S_IFDIR])
         if src_inode is None or dst_parent_inode is None:
@@ -285,6 +288,9 @@ class MyFs(Operations):
     def unlink(self, path):
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
 
+        if parent_dir == "/versions" or path in ("/restore", "/store"):
+            raise FuseOSError(EPERM)
+
         curr_inode = self.get_inode(path, [S_IFREG, S_IFLNK])
         parent_inode = self.get_inode(parent_dir, [S_IFDIR])
         if ((parent_inode is None) or (curr_inode is None)):
@@ -303,6 +309,9 @@ class MyFs(Operations):
 
     @logger
     def rename(self, old, new):
+        if old in ("/restore", "/store", "/versions"):
+            raise FuseOSError(EPERM)
+
         curr_inode = self.get_inode(old, [S_IFREG, S_IFDIR])
         if curr_inode is None:
             raise FuseOSError(ENOENT)
@@ -316,6 +325,9 @@ class MyFs(Operations):
     def symlink(self, target, source): 
         target_filename, target_parent = MyFs.get_filename_and_parentdir(target)
         source_filename, source_parent = MyFs.get_filename_and_parentdir(target)
+
+        if source_parent == "/versions" or source in ("/restore", "/store"):
+            raise FuseOSError(EPERM)
 
         target_parent_inode = self.get_inode(target_parent, [S_IFDIR])
         source_inode = self.get_inode(source, [S_IFREG, S_IFLNK])
@@ -372,7 +384,10 @@ class MyFs(Operations):
     @logger
     def mkdir(self, path, mode):
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
-        
+       
+        if parent_dir == "/versions":
+            raise FuseOSError(EPERM)
+
         inode = Inode(
             1,
             curr_filename,
@@ -395,6 +410,9 @@ class MyFs(Operations):
     @logger
     def rmdir(self, path): 
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
+
+        if path == "/versions":
+            raise FuseOSError(EPERM)
 
         curr_inode = self.get_inode(path, [S_IFDIR])
         parent_inode = self.get_inode(parent_dir, [S_IFDIR])
