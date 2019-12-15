@@ -419,6 +419,9 @@ class MyFs(Operations):
         if (parent_inode is None) or (curr_inode is None):
             raise FuseOSError(ENOENT)
 
+        if curr_inode.inodes:
+            raise FuseOSError(EPERM)
+
         parent_inode.inodes.remove(curr_inode)
 
         del curr_inode
