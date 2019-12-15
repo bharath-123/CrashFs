@@ -63,9 +63,44 @@ class MyFs(Operations):
                 getuid(),
                 getgid()
                 )
+        versions = Inode(
+                1, 
+                "versions",
+                S_IFDIR | 0o755,
+                time(),
+                time(),
+                time(),
+                getuid(),
+                getgid()
+                )
 
         self.root_inode.inodes.append(restore)
         self.root_inode.inodes.append(store)
+        self.root_inode.inodes.append(versions)
+
+        # fill up the versions directory with states.
+        # if the states are already present in the media
+        # device
+        states = self.get_fs_versions()
+
+        for state in states:
+            state_inode = Inode(
+                            1,
+                            state,
+                            S_IFREG | 0o755,
+                            time(),
+                            time(),
+                            time(),
+                            getuid(),
+                            getgid()
+                        )
+            versions.inodes.append(state_inode)
+
+    def get_fs_versions(self):
+        return self.crash_history.get_all_versions()
+
+    def get_version_creation(self, version):
+        return self.crash_history.get_version_date(version)
 
     def handle_fs_state(self, path, version):
         if path == "/restore":
@@ -74,6 +109,23 @@ class MyFs(Operations):
                 self.root_inode = copy(latest_state)
                 self.wipe_out_cache()
         else:
+            # create a pseudo file to represent each version.
+            # this is for the user to check the versions present in 
+            # the system
+            version_inode = Inode(
+                                1,
+                                version,
+                                S_IFREG | 0o755,
+                                time(),
+                                time(),
+                                time(),
+                                getuid(),
+                                getgid(),
+                            )
+            version_dir_inode = self.search_root_inode("/versions", [S_IFDIR])
+            if version_dir_inode:
+                version_dir_inode.inodes.append(version_inode)
+
             self.crash_history.add_to_history(copy(self.root_inode), version)
 
     @staticmethod

@@ -1,5 +1,6 @@
 import pickle
-from os import mkdir, path
+from os import mkdir, path, stat, listdir
+from datetime import datetime
 
 class CrashHistory():
     def __init__(self, backupstore):
@@ -30,3 +31,17 @@ class CrashHistory():
             backup = pickle.load(fd)
 
         return backup
+
+    def get_version_date(self, version):
+        filename = self.backupstore + "/" + version + "/history.pkl"
+
+        if not path.exists(filename):
+            return None
+
+        return datetime.fromtimestamp(stat(filename).st_mtime).strftime("%d/%m/%Y, %H:%M:%S")
+
+    def get_all_versions(self):
+        if not path.exists(self.backupstore):
+            return []
+
+        return listdir(self.backupstore)
