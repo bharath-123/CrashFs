@@ -112,7 +112,10 @@ class MyFs(Operations):
             # create a pseudo file to represent each version.
             # this is for the user to check the versions present in 
             # the system
-            version_inode = Inode(
+            # first check if this state is being overwritten. 
+            version_inode = self.get_inode("/versions/" + version, [S_IFREG])
+            if version_inode is None:
+                version_inode = Inode(
                                 1,
                                 version,
                                 S_IFREG | 0o755,
@@ -121,10 +124,10 @@ class MyFs(Operations):
                                 time(),
                                 getuid(),
                                 getgid(),
-                            )
-            version_dir_inode = self.search_root_inode("/versions", [S_IFDIR])
-            if version_dir_inode:
-                version_dir_inode.inodes.append(version_inode)
+                                )
+                version_dir_inode = self.get_inode("/versions", [S_IFDIR])
+                if version_dir_inode:
+                    version_dir_inode.inodes.append(version_inode)
 
             self.crash_history.add_to_history(copy(self.root_inode), version)
 
