@@ -14,6 +14,7 @@ from copy import copy, deepcopy
 from data import *
 from inode import *
 from history import *
+from decorators import *
 import argparse
 import pickle
 
@@ -153,7 +154,8 @@ class MyFs(Operations):
             del self.name2inode[path]    
         except KeyError:
             pass
-
+    
+    @logger
     def chmod(self, path, mode):
         inode = self.get_inode(path, [S_IFDIR, S_IFREG, S_IFLNK])
         if inode is None:
@@ -161,6 +163,7 @@ class MyFs(Operations):
 
         inode.set_mode(mode)
 
+    @logger
     def chown(self, path, uid, gid):
         inode = self.get_inode(path, [S_IFDIR, S_IFREG, S_IFLNK])
         if inode is None:
@@ -171,9 +174,11 @@ class MyFs(Operations):
 
     # need to implement to overwrite files
     # Increase the size of the file
+    @logger
     def truncate(self, path, length):
         pass   
 
+    @logger
     def write(self, path, data, offset, fh):
         # intercept write to the restore and store files
         if path in ("/restore", "/store"):
@@ -187,6 +192,7 @@ class MyFs(Operations):
 
         return len(data)
 
+    @logger
     def read(self, path, size, offset, fh):
         inode = self.get_inode(path, [S_IFREG, S_IFLNK])
         if inode is None:
@@ -194,6 +200,7 @@ class MyFs(Operations):
 
         return inode.get_data()
 
+    @logger
     def link(self, dst, src):
         dst_filename, dst_parent_dir = MyFs.get_filename_and_parentdir(dst)
         src_filename, src_parent_dir = MyFs.get_filename_and_parentdir(src)
@@ -213,6 +220,7 @@ class MyFs(Operations):
         dst_inode.set_inode(src_inode.get_inode())
         dst_parent_inode.inodes.append(dst_inode)
 
+    @logger
     def unlink(self, path):
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
 
@@ -232,6 +240,7 @@ class MyFs(Operations):
 
         self.invalidate_cache(path)
 
+    @logger
     def rename(self, old, new):
         curr_inode = self.get_inode(old, [S_IFREG, S_IFDIR])
         if curr_inode is None:
@@ -242,6 +251,7 @@ class MyFs(Operations):
 
         self.invalidate_cache(old)
 
+    @logger
     def symlink(self, target, source): 
         target_filename, target_parent = MyFs.get_filename_and_parentdir(target)
         source_filename, source_parent = MyFs.get_filename_and_parentdir(target)
@@ -267,6 +277,7 @@ class MyFs(Operations):
 
         return 0
 
+    @logger
     def readlink(self, path):
         link_inode = self.get_inode(path, [S_IFLNK])
         if link_inode is None:
@@ -274,6 +285,7 @@ class MyFs(Operations):
 
         return link_inode.get_data()
 
+    @logger
     def create(self, path, mode): 
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
         
@@ -296,6 +308,7 @@ class MyFs(Operations):
 
         return 0
 
+    @logger
     def mkdir(self, path, mode):
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
         
@@ -318,6 +331,7 @@ class MyFs(Operations):
 
         return 0
    
+    @logger
     def rmdir(self, path): 
         curr_filename, parent_dir = MyFs.get_filename_and_parentdir(path)
 
@@ -331,7 +345,8 @@ class MyFs(Operations):
         del curr_inode
 
         self.invalidate_cache(path)
-
+    
+    @logger
     def readdir(self, path, fh):  
         node = self.get_inode(path, [S_IFDIR, S_IFREG, S_IFLNK])
         if node is None:
@@ -340,6 +355,7 @@ class MyFs(Operations):
         for node in node.inodes:
             yield node.name
 
+    @logger
     def getattr(self, path, fh=None):
         node = self.get_inode(path, [S_IFDIR, S_IFREG, S_IFLNK])
         if node is None:
