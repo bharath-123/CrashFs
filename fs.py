@@ -188,6 +188,10 @@ class MyFs(Operations):
         return len(data)
 
     def read(self, path, size, offset, fh):
+        # prevent reading of the restore and store files
+        if path in ("/restore", "/store"):
+            raise FuseOSError(EPERM)
+        
         inode = self.get_inode(path, [S_IFREG, S_IFLNK])
         if inode is None:
             raise FuseOSError(ENOENT)
