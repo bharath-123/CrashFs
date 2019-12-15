@@ -232,9 +232,13 @@ class MyFs(Operations):
 
     @logger
     def write(self, path, data, offset, fh):
+        filename, parent_dir = MyFs.get_filename_and_parentdir(path)
         # intercept write to the restore and store files
         if path in ("/restore", "/store"):
             self.handle_fs_state(path, data.decode('utf-8').rstrip())
+
+        if parent_dir == "/version":
+            raise FuseOSError(EPERM)
          
         inode = self.get_inode(path, [S_IFREG, S_IFLNK])        
         if inode is None:
@@ -246,10 +250,11 @@ class MyFs(Operations):
 
     @logger
     def read(self, path, size, offset, fh):
+        filename, parent_dir = MyFs.get_filename_and_parentdir(path)
         # prevent reading of the restore and store files
-        if path in ("/restore", "/store"):
+        if path in ("/restore", "/store") or parent_dir == "/version":
             raise FuseOSError(EPERM)
-        
+
         inode = self.get_inode(path, [S_IFREG, S_IFLNK])
         if inode is None:
             raise FuseOSError(ENOENT)
